@@ -17,8 +17,8 @@ class PhotonVirtual {
     public:
         PhotonVirtual(string marlin_port, string photon_port);
         ~PhotonVirtual();
-        bool newCommand(string &command);
-    private:
+        bool newCommand(string *command);
+    
         int serial_port_marlin, serial_port_photon;
         char read_buf [256];
 };

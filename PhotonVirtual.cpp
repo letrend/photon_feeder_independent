@@ -36,12 +36,12 @@ PhotonVirtual::PhotonVirtual(string marlin_port, string photon_port) {
         // tty.c_oflag &= ~OXTABS; // Prevent conversion of tabs to spaces (NOT PRESENT ON LINUX)
         // tty.c_oflag &= ~ONOEOT; // Prevent removal of C-d chars (0x004) in output (NOT PRESENT ON LINUX)
 
-        tty.c_cc[VTIME] = 10;    // Wait for up to 1s (10 deciseconds), returning as soon as any data is received.
+        tty.c_cc[VTIME] = 1;    // Wait for up to 1s (10 deciseconds), returning as soon as any data is received.
         tty.c_cc[VMIN] = 0;
 
         // Set in/out baud rate to be 9600
-        cfsetispeed(&tty, B57600);
-        cfsetospeed(&tty, B57600);
+        cfsetispeed(&tty, B2000000);
+        cfsetospeed(&tty, B2000000);
 
         // Save tty settings, also checking for error
         if (tcsetattr(serial_port_marlin, TCSANOW, &tty) != 0) {
@@ -80,7 +80,7 @@ PhotonVirtual::PhotonVirtual(string marlin_port, string photon_port) {
         // tty.c_oflag &= ~OXTABS; // Prevent conversion of tabs to spaces (NOT PRESENT ON LINUX)
         // tty.c_oflag &= ~ONOEOT; // Prevent removal of C-d chars (0x004) in output (NOT PRESENT ON LINUX)
 
-        tty.c_cc[VTIME] = 10;    // Wait for up to 1s (10 deciseconds), returning as soon as any data is received.
+        tty.c_cc[VTIME] = 1;    // Wait for up to 1s (10 deciseconds), returning as soon as any data is received.
         tty.c_cc[VMIN] = 0;
 
         // Set in/out baud rate to be 9600
@@ -101,17 +101,26 @@ PhotonVirtual::~PhotonVirtual() {
     close(serial_port_photon);
 }
 
-bool PhotonVirtual::newCommand(string &command){
+bool PhotonVirtual::newCommand(string *command){
+    memset(&read_buf, '\0', sizeof(read_buf));
     int num_bytes = read(serial_port_marlin, &read_buf, sizeof(read_buf));
-
     // // n is the number of bytes read. n may be 0 if no bytes were received, and can also be -1 to signal an error.
     // if (num_bytes < 0) {
     //     printf("Error reading: %s", strerror(errno));
     //     return false;
     // }else{
         if (num_bytes > 0) {
-            printf("Read %i bytes. Received message: %s", num_bytes, read_buf);
-            command = string(read_buf);
+            printf("Read %i bytes. Received message from openPnP: %s\n", num_bytes, read_buf);
+            for(int i=0;i<num_bytes;i++){
+                printf("%x\t", read_buf[i]);
+            }
+            cout<< endl;
+            *command = string(read_buf);
+            string reply("ok\n");
+            cout << reply;
+            write(serial_port_marlin, reply.c_str(), reply.size());
+            // sleep(2); //required to make flush work, for some reason
+            // tcflush(serial_port_marlin,TCIOFLUSH);
             return true;
         }else{
             return false;
