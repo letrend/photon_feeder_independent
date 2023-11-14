@@ -101,30 +101,63 @@ PhotonVirtual::~PhotonVirtual() {
     close(serial_port_photon);
 }
 
-bool PhotonVirtual::newCommand(string *command){
-    memset(&read_buf, '\0', sizeof(read_buf));
-    int num_bytes = read(serial_port_marlin, &read_buf, sizeof(read_buf));
-    // // n is the number of bytes read. n may be 0 if no bytes were received, and can also be -1 to signal an error.
-    // if (num_bytes < 0) {
-    //     printf("Error reading: %s", strerror(errno));
-    //     return false;
-    // }else{
-        if (num_bytes > 0) {
-            printf("Read %i bytes. Received message from openPnP: %s\n", num_bytes, read_buf);
-            for(int i=0;i<num_bytes;i++){
-                printf("%x\t", read_buf[i]);
-            }
-            cout<< endl;
-            *command = string(read_buf);
-            string reply("ok\n");
-            cout << reply;
-            write(serial_port_marlin, reply.c_str(), reply.size());
-            // sleep(2); //required to make flush work, for some reason
-            // tcflush(serial_port_marlin,TCIOFLUSH);
-            return true;
-        }else{
-            return false;
-        }
-    // }
+int PhotonVirtual::char2int(char input)
+{
+  if(input >= '0' && input <= '9')
+    return input - '0';
+  if(input >= 'A' && input <= 'F')
+    return input - 'A' + 10;
+  if(input >= 'a' && input <= 'f')
+    return input - 'a' + 10;
+  throw std::invalid_argument("Invalid input string");
+}
 
+void PhotonVirtual::run(){
+    string ok("ok\n");
+    while(true){
+        memset(&read_buf, '\0', sizeof(read_buf));
+        int num_bytes = read(serial_port_marlin, &read_buf, sizeof(read_buf));
+        if (num_bytes > 0) {
+            printf("Received message from openPnP: %s", read_buf);
+            string command = string(read_buf);
+            
+            write(serial_port_marlin, ok.c_str(), ok.size());
+            
+            uint8_t buf[64];
+            int j=0;
+            for(int i=5;i<command.length()-1;i++){
+                buf[i-5] = char2int(command[i]);
+                j++;
+            }
+            uint8_t buf2[32];
+            for(int i=0;i<j;i+=2){
+                buf2[i/2] = buf[i] << 4 | buf[i+1]&0xf;
+            }
+            write(serial_port_photon, buf2, j/2);
+
+            uint8_t read_buf[32];
+            memset(&read_buf, '\0', sizeof(read_buf));
+            int num_bytes = read(serial_port_photon, &read_buf, sizeof(read_buf));
+            if (num_bytes > 0) {
+                char buf4[64];
+                memset(&buf4, '\0', sizeof(buf4));
+                string reply("rs485-reply: ");
+                for(int i=0;i<num_bytes*2;i+=2){
+                    sprintf(&buf4[i], "%x", (read_buf[i/2]>>4)&0xf); 
+                    sprintf(&buf4[i+1], "%x", read_buf[i/2]&0xf); 
+                }
+                string str(buf4);
+                transform(str.begin(), str.end(), str.begin(), ::toupper);
+                string reply2 = reply+str+"\r";
+                cout << reply2 << endl;
+                write(serial_port_marlin, reply2.c_str(), reply2.size());
+                string reply3("ok\n");
+                write(serial_port_marlin, reply3.c_str(), reply3.size());
+            }else{
+                string reply("rs485-reply: TIMEOUT\n");
+                cout << reply;
+                write(serial_port_marlin, reply.c_str(), reply.size());
+            }
+        }
+    }
 }
